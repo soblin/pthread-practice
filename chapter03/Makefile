@@ -9,7 +9,7 @@ firstThrerad: main.o
 	$(CC) ($LDFLAGS) $^ -o $@
 
 clean:
-	rm -rf $(TARGET) *.o
+	rm -rf $(TARGET) *.o fdProcess.txt fdThread.txt
 
 run: main
 	./main
