@@ -1,12 +1,10 @@
 TARGET := main
 
-CFLAGS := $(CFLAGS) -pthread
-LDFLAGS := $(LDFLAGS) -pthread
+CFLAGS := $(CFLAGS)
+LDFLAGS := $(LDFLAGS) -pthread -lm
 
-all: $(TARGET)
-
-firstThrerad: main.o
-	$(CC) ($LDFLAGS) $^ -o $@
+all: main.c
+	$(CC) -o main main.c $(LDFLAGS)
 
 clean:
 	rm -rf $(TARGET) *.o
