@@ -27,7 +27,7 @@ double randDouble(double minValue, double maxValue){
   return minValue + (double)rand() / ( (double)RAND_MAX + 1 ) * (maxValue - minValue);
 }
 
-void cleerScreen(){
+void clearScreen(){
   fputs("\033[2J", stdout);
 }
 
@@ -129,5 +129,36 @@ void *doDraw(void *arg){
 }
 
 int main(){
+  pthread_t drawThread;
+  pthread_t moveThread[MAX_FLY];
+  char buf[40];
+
+  srand((unsigned int)time(NULL));
+  pthread_mutex_init(&mutex, NULL);
+  clearScreen();
+
+  for(int i = 0; i < MAX_FLY; ++i){
+    FlyInitRandom(&flyList[i], flyMarkList[i]);
+  }
+
+  for(int i = 0; i < MAX_FLY; ++i){
+    if(0 != pthread_create(&moveThread[i], NULL, doMove, (void *)&flyList[i])){
+      perror("pthread_create");
+      exit(1);
+    }
+  }
+
+  pthread_create(&drawThread, NULL, doDraw, NULL);
+
+  fgets(buf, sizeof(buf), stdin);
+  stopRequest = 1;
+
+  pthread_join(drawThread, NULL);
+  for(int i = 0; i < MAX_FLY; ++i){
+    pthread_join(moveThread[i], NULL);
+  }
+  
+  pthread_mutex_destroy(&mutex);
+
   return 0;
 }
