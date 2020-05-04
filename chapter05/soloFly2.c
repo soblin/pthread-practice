@@ -43,6 +43,7 @@ typedef struct {
   double destX, destY;
   int busy;
   pthread_mutex_t mutex;
+  pthread_cond_t cond;
 } Fly;
 
 Fly flyList[MAX_FLY];
@@ -50,6 +51,7 @@ Fly flyList[MAX_FLY];
 void FlyInitCenter(Fly *fly, char mark){
   fly->mark = mark;
   pthread_mutex_init(&fly->mutex, NULL);
+  pthread_cond_init(&fly->cond, NULL);
   fly->x = (double)(WIDTH / 2.0);
   fly->y = (double)(HEIGHT / 2.0);
   fly->angle = 0;
@@ -61,6 +63,7 @@ void FlyInitCenter(Fly *fly, char mark){
 
 void FlyDestroy(Fly *fly){
   pthread_mutex_destroy(&fly->mutex);
+  pthread_cond_destroy(&fly->cond);
 }
 
 void FlyMove(Fly *fly){
@@ -77,7 +80,6 @@ int FlyIsAt(Fly *fly, int x, int y){
   return res;
 }
 
-// 目標地点に合わせて移動方向と速度を調整する
 void FlySetDirection(Fly *fly){
   pthread_mutex_lock(&fly->mutex);
   double dx = (fly->destX) - (fly->x);
@@ -98,7 +100,6 @@ double FlyDistanceToDestination(Fly *fly){
   return res;
 }
 
-// ハエの目標地点をセットする
 int FlySetDestination(Fly *fly, double x, double y){
   if(fly->busy)
     return 0;
@@ -106,20 +107,29 @@ int FlySetDestination(Fly *fly, double x, double y){
   pthread_mutex_lock(&fly->mutex);
   fly->destX = x;
   fly->destY = y;
+  pthread_cond_signal(&fly->cond);
   pthread_mutex_unlock(&fly->mutex);
   return 1;
+}
+
+void FlyWaitForSetDestination(Fly *fly){
+  pthread_mutex_lock(&fly->mutex);
+  if(pthread_cond_wait(&fly->cond, &fly->mutex) != 0){
+    perror("pthread_cond_wait");
+    exit(1);
+  }
+  pthread_mutex_unlock(&fly->mutex);
 }
 
 void *doMove(void *arg){
   Fly *fly = (Fly *)arg;
   while(!stopRequest){
-    // destinationに着くまでが1回
     fly->busy = 0;
-    // 目標地点に着いたらストップする
-    // 新しい目標地点が入力されるまでsleepしている
-    while((FlyDistanceToDestination(fly) < 1) && !stopRequest){
-      mSleep(100);
-    }
+
+    FlyWaitForSetDestination(fly);
+    if(FlyDistanceToDestination(fly) < 1)
+      continue;
+    
     fly->busy = 1;
     FlySetDirection(fly);
     while((FlyDistanceToDestination(fly) >= 1) && !stopRequest){
@@ -135,10 +145,10 @@ void drawScreen(){
   saveCursor();
   moveCursor(0, 0);
 
-  for(int y = 0; y < HEIGHT; y++){
-    for(int x = 0; x < WIDTH; x++){
+  for(int y = 0; y < HEIGHT; ++y){
+    for(int x = 0; x < WIDTH; ++x){
       char ch = 0;
-      for(int i = 0; i < MAX_FLY; i++){
+      for(int i = 0; i < MAX_FLY; ++i){
         if(FlyIsAt(&flyList[i], x, y)){
           ch = flyList[i].mark;
           break;
@@ -156,6 +166,7 @@ void drawScreen(){
     }
     putchar('\n');
   }
+
   restoreCursor();
   fflush(stdout);
 }
@@ -178,15 +189,13 @@ int main(){
   clearScreen();
   FlyInitCenter(&flyList[0], '@');
 
-  int first = 1;
+  pthread_create(&moveThread, NULL, doMove, (void *)&flyList[0]);
 
+  pthread_create(&drawThread, NULL, doDraw, NULL);
+
+  fflush(stdout);
   while(1){
-    if(first){
-      pthread_create(&moveThread, NULL, doMove, (void *)&flyList[0]);
-      pthread_create(&drawThread, NULL, doDraw, NULL);
-      first = 0;
-    }
-    printf("Destination? ");
+    printf("Destination? :");
     fflush(stdout);
     fgets(buf, sizeof(buf), stdin);
     if(strncmp(buf, "stop", 4) == 0)
