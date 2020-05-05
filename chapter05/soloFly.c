@@ -181,12 +181,12 @@ int main(){
   int first = 1;
 
   while(1){
+    printf("Destination? ");
     if(first){
       pthread_create(&moveThread, NULL, doMove, (void *)&flyList[0]);
       pthread_create(&drawThread, NULL, doDraw, NULL);
       first = 0;
     }
-    printf("Destination? ");
     fflush(stdout);
     fgets(buf, sizeof(buf), stdin);
     if(strncmp(buf, "stop", 4) == 0)

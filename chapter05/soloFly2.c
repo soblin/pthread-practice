@@ -11,6 +11,8 @@
 #define DRAW_CYCLE 50
 
 int stopRequest;
+pthread_mutex_t print_mutex;
+int offset = 1;
 
 void mSleep(int msec){
   struct timespec ts;
@@ -107,6 +109,7 @@ int FlySetDestination(Fly *fly, double x, double y){
   pthread_mutex_lock(&fly->mutex);
   fly->destX = x;
   fly->destY = y;
+  offset += 1;
   pthread_cond_signal(&fly->cond);
   pthread_mutex_unlock(&fly->mutex);
   return 1;
@@ -142,6 +145,7 @@ void *doMove(void *arg){
 }
 
 void drawScreen(){
+  pthread_mutex_lock(&print_mutex);
   saveCursor();
   moveCursor(0, 0);
 
@@ -169,6 +173,7 @@ void drawScreen(){
 
   restoreCursor();
   fflush(stdout);
+  pthread_mutex_unlock(&print_mutex);
 }
 
 void *doDraw(void *arg){
@@ -189,21 +194,29 @@ int main(){
   clearScreen();
   FlyInitCenter(&flyList[0], '@');
 
-  pthread_create(&moveThread, NULL, doMove, (void *)&flyList[0]);
-
-  pthread_create(&drawThread, NULL, doDraw, NULL);
-
+  int first = 1;
   fflush(stdout);
   while(1){
+    pthread_mutex_lock(&print_mutex);
+    moveCursor(0, HEIGHT+offset);
     printf("Destination? :");
     fflush(stdout);
+    pthread_mutex_unlock(&print_mutex);
+    if(first){
+      pthread_create(&moveThread, NULL, doMove, (void *)&flyList[0]);
+      pthread_create(&drawThread, NULL, doDraw, NULL);
+      first = 0;
+    }
     fgets(buf, sizeof(buf), stdin);
     if(strncmp(buf, "stop", 4) == 0)
       break;
     destX = strtod(buf, &cp);
     destY = strtod(cp, &cp);
     if(!FlySetDestination(&flyList[0], destX, destY)){
+      pthread_mutex_lock(&print_mutex);
       printf("The fly is busy now. Try later.\n");
+      offset += 2;
+      pthread_mutex_unlock(&print_mutex);
     }
   }
 
