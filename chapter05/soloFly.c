@@ -11,6 +11,7 @@
 #define DRAW_CYCLE 50
 
 int stopRequest;
+int offset;
 
 void mSleep(int msec){
   struct timespec ts;
@@ -106,6 +107,7 @@ int FlySetDestination(Fly *fly, double x, double y){
   pthread_mutex_lock(&fly->mutex);
   fly->destX = x;
   fly->destY = y;
+  offset += 1;
   pthread_mutex_unlock(&fly->mutex);
   return 1;
 }
@@ -178,15 +180,14 @@ int main(){
   clearScreen();
   FlyInitCenter(&flyList[0], '@');
 
-  int first = 1;
+  offset = 1;
+
+  pthread_create(&moveThread, NULL, doMove, (void *)&flyList[0]);
+  pthread_create(&drawThread, NULL, doDraw, NULL);
 
   while(1){
+    moveCursor(0, HEIGHT + offset);
     printf("Destination? ");
-    if(first){
-      pthread_create(&moveThread, NULL, doMove, (void *)&flyList[0]);
-      pthread_create(&drawThread, NULL, doDraw, NULL);
-      first = 0;
-    }
     fflush(stdout);
     fgets(buf, sizeof(buf), stdin);
     if(strncmp(buf, "stop", 4) == 0)
@@ -195,6 +196,7 @@ int main(){
     destY = strtod(cp, &cp);
     if(!FlySetDestination(&flyList[0], destX, destY)){
       printf("The fly is busy now. Try later.\n");
+      offset += 2;
     }
   }
 
